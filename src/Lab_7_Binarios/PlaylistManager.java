@@ -51,6 +51,14 @@ public class PlaylistManager {
         }
     }
 
+    public void reescribirTodas(List<Cancion> lista) throws IOException {
+        raf.seek(0);
+        raf.setLength(0);
+        for (Cancion c : lista) {
+            escribirRegistro(c);
+        }
+    }
+
     public void cerrar() {
         try {
             if (raf != null) {
@@ -65,7 +73,7 @@ public class PlaylistManager {
         escribirCampo(c.getArtista(), Cancion.ARTISTA_MAX);
         escribirCampo(c.getRutaAudio(), Cancion.RUTA_MAX);
         escribirCampo(c.getRutaImagen(), Cancion.IMAGEN_MAX);
-        escribirCampo(c.getGenero().getNombre(), Cancion.GENERO_MAX); 
+        escribirCampo(c.getGenero().getNombre(), Cancion.GENERO_MAX);  
         raf.writeInt(c.getDuracion());
     }
 

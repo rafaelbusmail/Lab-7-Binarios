@@ -23,7 +23,8 @@ public class GUI extends JFrame {
     private JLabel lblDuracion;
     private JLabel lblGenero;
     private JProgressBar barraProgreso;
-    private JButton btnPlay, btnPause, btnStop;
+    private JButton btnPlayPause;
+    private JButton btnStop;
     private JButton btnAdd, btnRemove;
     private JList<String> listaUI;
     private DefaultListModel<String> modeloLista;
@@ -57,6 +58,7 @@ public class GUI extends JFrame {
         timerUI.start();
     }
 
+    
     private void initUI() {
         setTitle("Music Player");
         setSize(900, 580);
@@ -104,12 +106,26 @@ public class GUI extends JFrame {
         lblDuracion = label("0:00 / 0:00", 12, Font.PLAIN, TEXT_DIM);
 
         barraProgreso = new JProgressBar(0, 1000);
-        barraProgreso.setMaximumSize(new Dimension(IMG_W, 4));
-        barraProgreso.setPreferredSize(new Dimension(IMG_W, 4));
+        barraProgreso.setMaximumSize(new Dimension(IMG_W, 8));
+        barraProgreso.setPreferredSize(new Dimension(IMG_W, 8));
         barraProgreso.setAlignmentX(Component.CENTER_ALIGNMENT);
         barraProgreso.setForeground(ACCENT);
         barraProgreso.setBackground(new Color(50, 50, 68));
         barraProgreso.setBorderPainted(false);
+        barraProgreso.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+
+        barraProgreso.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseClicked(MouseEvent e) {
+                seek(e.getX());
+            }
+        });
+        barraProgreso.addMouseMotionListener(new MouseMotionAdapter() {
+            @Override
+            public void mouseDragged(MouseEvent e) {
+                seek(e.getX());
+            }
+        });
 
         JPanel controls = buildControls();
 
@@ -129,22 +145,32 @@ public class GUI extends JFrame {
         return panel;
     }
 
+    private void seek(int clickX) {
+        if (!reproductor.isPlaying() && !reproductor.isPaused()) {
+            return;
+        }
+        double ratio = Math.max(0, Math.min(1.0,
+                (double) clickX / barraProgreso.getWidth()));
+        reproductor.seekTo(ratio);
+        int total = reproductor.getDuracionRealSegundos();
+        int elapsed = (int) (ratio * total);
+        barraProgreso.setValue((int) (ratio * 1000));
+        lblDuracion.setText(formatSeg(elapsed) + " / " + formatSeg(total));
+    }
+
     private JPanel buildControls() {
         JPanel p = new JPanel(new FlowLayout(FlowLayout.CENTER, 12, 0));
         p.setBackground(BG_DARK);
         p.setAlignmentX(Component.CENTER_ALIGNMENT);
         p.setMaximumSize(new Dimension(340, 50));
 
-        btnPlay = ctrlBtn("▶", "Play");
-        btnPause = ctrlBtn("⏸", "Pause");
+        btnPlayPause = ctrlBtn("▶", "Play");
         btnStop = ctrlBtn("⏹", "Stop");
 
-        btnPlay.addActionListener(e -> accionPlay());
-        btnPause.addActionListener(e -> accionPause());
+        btnPlayPause.addActionListener(e -> accionPlayPause());
         btnStop.addActionListener(e -> accionStop());
 
-        p.add(btnPlay);
-        p.add(btnPause);
+        p.add(btnPlayPause);
         p.add(btnStop);
         return p;
     }
@@ -203,8 +229,17 @@ public class GUI extends JFrame {
         return panel;
     }
 
-    private void accionPlay() {
-        if (!reproductor.isPlaying() && !reproductor.isPaused()) {
+    
+    private void accionPlayPause() {
+        if (reproductor.isPlaying()) {
+            reproductor.pause();
+            btnPlayPause.setText("▶");
+            btnPlayPause.setToolTipText("Play");
+        } else if (reproductor.isPaused()) {
+            reproductor.play();
+            btnPlayPause.setText("⏸");
+            btnPlayPause.setToolTipText("Pause");
+        } else {
             int idx = listaUI.getSelectedIndex();
             if (idx < 0 && !playlist.isEmpty()) {
                 idx = 0;
@@ -213,21 +248,17 @@ public class GUI extends JFrame {
                 return;
             }
             cargarYMostrar(idx);
-        }
-        reproductor.play();
-    }
-
-    private void accionPause() {
-        if (reproductor.isPlaying()) {
-            reproductor.pause();
-        } else if (reproductor.isPaused()) {
             reproductor.play();
+            btnPlayPause.setText("⏸");
+            btnPlayPause.setToolTipText("Pause");
         }
     }
 
     private void accionStop() {
         Cancion c = reproductor.getCancionActual();
         reproductor.stop();
+        btnPlayPause.setText("▶");
+        btnPlayPause.setToolTipText("Play");
         barraProgreso.setValue(0);
         lblDuracion.setText("0:00 / " + (c != null ? formatSeg(c.getDuracion()) : "0:00"));
     }
@@ -240,6 +271,8 @@ public class GUI extends JFrame {
         reproductor.stop();
         cargarYMostrar(idx);
         reproductor.play();
+        btnPlayPause.setText("⏸");
+        btnPlayPause.setToolTipText("Pause");
     }
 
     private void accionAdd() {
@@ -247,73 +280,129 @@ public class GUI extends JFrame {
         chooser.setDialogTitle("Select song");
         chooser.setFileFilter(new javax.swing.filechooser.FileNameExtensionFilter(
                 "Audio files (*.wav, *.mp3)", "wav", "mp3"));
-        if (chooser.showOpenDialog(this) != JFileChooser.APPROVE_OPTION) {
-            return;
-        }
-        File audioFile = chooser.getSelectedFile();
-        String rutaAudio = audioFile.getAbsolutePath();
+        chooser.setAcceptAllFileFilterUsed(false);
 
+        while (true) {
+            int result = chooser.showOpenDialog(this);
+            if (result != JFileChooser.APPROVE_OPTION) {
+                return;
+            }
+
+            File audioFile = chooser.getSelectedFile();
+            if (!audioFile.exists() || !audioFile.isFile()) {
+                JOptionPane.showMessageDialog(this,
+                        "\"" + audioFile.getName() + "\" was not found.\n"
+                        + "Please select an existing audio file.",
+                        "File not found", JOptionPane.WARNING_MESSAGE);
+                continue;  
+            }
+            String ext = audioFile.getName().toLowerCase();
+            if (!ext.endsWith(".mp3") && !ext.endsWith(".wav")) {
+                JOptionPane.showMessageDialog(this,
+                        "Please select a .mp3 or .wav file.",
+                        "Invalid file type", JOptionPane.WARNING_MESSAGE);
+                continue;
+            }
+
+            String rutaAudio = audioFile.getAbsolutePath();
+
+            // 2. Select cover image — also validated
+            String rutaImagen = seleccionarImagen();
+
+            // 3. Detect duration via Clip
+            int duracionDetectada = detectarDuracionPorClip(rutaAudio);
+            if (duracionDetectada == 0) {
+                JOptionPane.showMessageDialog(this,
+                        "Could not read duration from this file.\n"
+                        + "Make sure mp3spi is in your lib/ folder for MP3 files.",
+                        "Duration error", JOptionPane.WARNING_MESSAGE);
+            }
+
+            // 4. Metadata form
+            JTextField tfName = new JTextField(
+                    audioFile.getName().replaceAll("\\.[^.]+$", ""), 22);
+            JTextField tfArtist = new JTextField(22);
+
+            JComboBox<String> cbGenre = new JComboBox<>(Genero.SUGERENCIAS);
+            cbGenre.setEditable(true);
+            cbGenre.setSelectedIndex(-1);
+            cbGenre.setToolTipText("Choose a suggestion or type your own");
+
+            JPanel form = new JPanel(new GridLayout(0, 2, 8, 8));
+            form.setBorder(BorderFactory.createEmptyBorder(8, 8, 8, 8));
+            form.add(new JLabel("Song name:"));
+            form.add(tfName);
+            form.add(new JLabel("Artist:"));
+            form.add(tfArtist);
+            form.add(new JLabel("Genre:"));
+            form.add(cbGenre);
+            form.add(new JLabel("Duration:"));
+            form.add(new JLabel(formatSeg(duracionDetectada) + "  (auto-detected)"));
+
+            int res = JOptionPane.showConfirmDialog(this, form,
+                    "Song details", JOptionPane.OK_CANCEL_OPTION,
+                    JOptionPane.PLAIN_MESSAGE);
+            if (res != JOptionPane.OK_OPTION) {
+                return;
+            }
+
+            String genreText = "";
+            Object genreSel = cbGenre.getEditor().getItem();
+            if (genreSel != null) {
+                genreText = genreSel.toString().trim();
+            }
+            if (genreText.isEmpty()) {
+                genreText = "Other";
+            }
+
+            Cancion nueva = new CancionMP3(
+                    tfName.getText().trim(),
+                    tfArtist.getText().trim(),
+                    duracionDetectada,
+                    rutaAudio, rutaImagen,
+                    new Genero(genreText)
+            );
+
+            try {
+                playlistManager.agregar(nueva);
+                playlist.add(nueva);
+                refrescarLista();
+            } catch (IOException e) {
+                JOptionPane.showMessageDialog(this, "Error saving song: " + e.getMessage());
+            }
+            return;  // done
+        }
+    }
+
+    // Image selection with validation
+    private String seleccionarImagen() {
         JFileChooser imgChooser = new JFileChooser();
-        imgChooser.setDialogTitle("Select album art (optional — you can cancel)");
+        imgChooser.setDialogTitle("Select album art (optional — Cancel to skip)");
         imgChooser.setFileFilter(new javax.swing.filechooser.FileNameExtensionFilter(
                 "Images (*.jpg, *.png)", "jpg", "jpeg", "png"));
-        String rutaImagen = "";
-        if (imgChooser.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
-            rutaImagen = imgChooser.getSelectedFile().getAbsolutePath();
-        }
+        imgChooser.setAcceptAllFileFilterUsed(false);
 
-        int duracionDetectada = detectarDuracionPorClip(rutaAudio);
-
-        JTextField tfName = new JTextField(
-                audioFile.getName().replaceAll("\\.[^.]+$", ""), 22);
-        JTextField tfArtist = new JTextField(22);
-
-        JComboBox<String> cbGenre = new JComboBox<>(Genero.SUGERENCIAS);
-        cbGenre.setEditable(true);
-        cbGenre.setSelectedIndex(-1);
-        cbGenre.setToolTipText("Choose a suggestion or type your own");
-
-        JPanel form = new JPanel(new GridLayout(0, 2, 8, 8));
-        form.setBorder(BorderFactory.createEmptyBorder(8, 8, 8, 8));
-        form.add(new JLabel("Song name:"));
-        form.add(tfName);
-        form.add(new JLabel("Artist:"));
-        form.add(tfArtist);
-        form.add(new JLabel("Genre:"));
-        form.add(cbGenre);
-        form.add(new JLabel("Duration:"));
-        form.add(new JLabel(formatSeg(duracionDetectada) + "  (auto-detected)"));
-
-        int res = JOptionPane.showConfirmDialog(this, form,
-                "Song details", JOptionPane.OK_CANCEL_OPTION,
-                JOptionPane.PLAIN_MESSAGE);
-        if (res != JOptionPane.OK_OPTION) {
-            return;
-        }
-
-        String genreText = "";
-        Object genreSel = cbGenre.getEditor().getItem();
-        if (genreSel != null) {
-            genreText = genreSel.toString().trim();
-        }
-        if (genreText.isEmpty()) {
-            genreText = "Other";
-        }
-
-        Cancion nueva = new CancionMP3(
-                tfName.getText().trim(),
-                tfArtist.getText().trim(),
-                duracionDetectada,
-                rutaAudio, rutaImagen,
-                new Genero(genreText)
-        );
-
-        try {
-            playlistManager.agregar(nueva);
-            playlist.add(nueva);
-            refrescarLista();
-        } catch (IOException e) {
-            JOptionPane.showMessageDialog(this, "Error saving song: " + e.getMessage());
+        while (true) {
+            int result = imgChooser.showOpenDialog(this);
+            if (result != JFileChooser.APPROVE_OPTION) {
+                return "";  // user cancelled = no image
+            }
+            File imgFile = imgChooser.getSelectedFile();
+            if (!imgFile.exists() || !imgFile.isFile()) {
+                JOptionPane.showMessageDialog(this,
+                        "\"" + imgFile.getName() + "\" was not found.\n"
+                        + "Please select an existing image, or Cancel to skip.",
+                        "File not found", JOptionPane.WARNING_MESSAGE);
+                continue;
+            }
+            String ext = imgFile.getName().toLowerCase();
+            if (!ext.endsWith(".jpg") && !ext.endsWith(".jpeg") && !ext.endsWith(".png")) {
+                JOptionPane.showMessageDialog(this,
+                        "Please select a .jpg or .png file, or Cancel to skip.",
+                        "Invalid file type", JOptionPane.WARNING_MESSAGE);
+                continue;
+            }
+            return imgFile.getAbsolutePath();
         }
     }
 
@@ -325,6 +414,8 @@ public class GUI extends JFrame {
         }
         if (idx == indiceActual) {
             reproductor.stop();
+            btnPlayPause.setText("▶");
+            btnPlayPause.setToolTipText("Play");
             indiceActual = -1;
             mostrarInfoCancion(null);
             mostrarImagenDefault();
@@ -342,6 +433,9 @@ public class GUI extends JFrame {
         }
     }
 
+    // ═══════════════════════════════════════════════════════════════════
+    //  TIMER TICK
+    // ═══════════════════════════════════════════════════════════════════
     private void tickUI() {
         if (!reproductor.isPlaying()) {
             return;
@@ -358,12 +452,22 @@ public class GUI extends JFrame {
         lblDuracion.setText(formatSeg(elapsed) + " / " + formatSeg(total));
     }
 
+    
     private void cargarYMostrar(int idx) {
         if (idx < 0 || idx >= playlist.size()) {
             return;
         }
         indiceActual = idx;
         Cancion c = playlist.get(idx);
+
+        if (!new File(c.getRutaAudio()).exists()) {
+            JOptionPane.showMessageDialog(this,
+                    "The file for \"" + c.getNombre() + "\" could not be found.\n"
+                    + "It may have been moved or deleted:\n" + c.getRutaAudio(),
+                    "File not found", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+
         reproductor.cargar(c);
 
         if (c.getDuracion() == 0) {
@@ -385,14 +489,26 @@ public class GUI extends JFrame {
         reproductor.setLineListener(ev -> {
             if (ev.getType() == LineEvent.Type.STOP && reproductor.getProgreso() >= 0.99) {
                 SwingUtilities.invokeLater(() -> {
-                    barraProgreso.setValue(0);
-                    lblDuracion.setText("0:00 / " + formatSeg(reproductor.getDuracionRealSegundos()));
+                    int next = indiceActual + 1;
+                    if (next < playlist.size()) {
+                        cargarYMostrar(next);
+                        reproductor.play();
+                        btnPlayPause.setText("⏸");
+                        btnPlayPause.setToolTipText("Pause");
+                    } else {
+                        barraProgreso.setValue(0);
+                        btnPlayPause.setText("▶");
+                        btnPlayPause.setToolTipText("Play");
+                        lblDuracion.setText("0:00 / " + formatSeg(c.getDuracion()));
+                    }
                 });
             }
         });
+
         mostrarInfoCancion(c);
         cargarImagen(c.getRutaImagen());
         listaUI.setSelectedIndex(idx);
+        listaUI.repaint(); 
     }
 
     private void mostrarInfoCancion(Cancion c) {
@@ -460,6 +576,7 @@ public class GUI extends JFrame {
         if (sel >= 0 && sel < modeloLista.size()) {
             listaUI.setSelectedIndex(sel);
         }
+        listaUI.repaint();
     }
 
     private int detectarDuracionPorClip(String ruta) {
@@ -467,7 +584,6 @@ public class GUI extends JFrame {
             File archivo = new File(ruta);
             AudioInputStream ais = AudioSystem.getAudioInputStream(archivo);
             AudioFormat fmt = ais.getFormat();
-
             if (fmt.getEncoding() != AudioFormat.Encoding.PCM_SIGNED) {
                 AudioFormat pcm = new AudioFormat(
                         AudioFormat.Encoding.PCM_SIGNED,
@@ -476,24 +592,29 @@ public class GUI extends JFrame {
                         fmt.getSampleRate(), false);
                 ais = AudioSystem.getAudioInputStream(pcm, ais);
             }
-
             DataLine.Info info = new DataLine.Info(Clip.class, ais.getFormat());
             Clip tempClip = (Clip) AudioSystem.getLine(info);
             tempClip.open(ais);
             int segundos = (int) (tempClip.getMicrosecondLength() / 1_000_000L);
             tempClip.close();
             return segundos;
-
         } catch (Exception e) {
-            System.err.println("Could not detect duration: " + e.getMessage());
             return 0;
         }
+    }
+
+    private String truncar(String text, int maxLen) {
+        if (text == null) {
+            return "";
+        }
+        return text.length() > maxLen ? text.substring(0, maxLen - 1) + "…" : text;
     }
 
     private String formatSeg(int seg) {
         return String.format("%d:%02d", seg / 60, seg % 60);
     }
 
+   
     private JLabel label(String text, int size, int style, Color color) {
         JLabel l = new JLabel(text);
         l.setFont(new Font("Arial", style, size));
@@ -538,6 +659,7 @@ public class GUI extends JFrame {
         return btn;
     }
 
+    
     private class PlaylistCellRenderer extends DefaultListCellRenderer {
 
         @Override
@@ -549,20 +671,24 @@ public class GUI extends JFrame {
 
             Cancion c = (index < playlist.size()) ? playlist.get(index) : null;
 
-            JLabel num = new JLabel(String.valueOf(index + 1));
-            num.setFont(new Font("Arial", Font.PLAIN, 11));
-            num.setForeground(TEXT_DIM);
-            num.setPreferredSize(new Dimension(20, 0));
+            boolean esActual = (index == indiceActual);
+            JLabel num = new JLabel(esActual ? "▶" : String.valueOf(index + 1));
+            num.setFont(new Font("Arial", Font.PLAIN, esActual ? 12 : 11));
+            num.setForeground(esActual ? ACCENT : TEXT_DIM);
+            num.setPreferredSize(new Dimension(22, 0));
 
             JPanel info = new JPanel();
             info.setLayout(new BoxLayout(info, BoxLayout.Y_AXIS));
             info.setOpaque(false);
 
-            JLabel lNombre = new JLabel(c != null ? c.getNombre() : value.toString());
-            lNombre.setFont(new Font("Arial", Font.BOLD, 12));
-            lNombre.setForeground(index == indiceActual ? ACCENT : TEXT_MAIN);
+            String nombre = truncar(c != null ? c.getNombre() : value.toString(), 28);
+            String artista = truncar(c != null ? c.getArtista() : "", 28);
 
-            JLabel lArtista = new JLabel(c != null ? c.getArtista() : "");
+            JLabel lNombre = new JLabel(nombre);
+            lNombre.setFont(new Font("Arial", Font.BOLD, 12));
+            lNombre.setForeground(esActual ? ACCENT : TEXT_MAIN);
+
+            JLabel lArtista = new JLabel(artista);
             lArtista.setFont(new Font("Arial", Font.PLAIN, 11));
             lArtista.setForeground(TEXT_SUB);
 

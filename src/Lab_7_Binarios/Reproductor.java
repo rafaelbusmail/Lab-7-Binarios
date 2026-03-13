@@ -18,23 +18,24 @@ public class Reproductor implements Reproducible {
         try {
             File archivo = new File(c.getRutaAudio());
             if (!archivo.exists()) {
-                System.err.println("Archivo no encontrado: " + c.getRutaAudio());
+                System.err.println("File not found: " + c.getRutaAudio());
                 return false;
             }
 
             AudioInputStream ais = AudioSystem.getAudioInputStream(archivo);
-            AudioFormat formato = ais.getFormat();
+            AudioFormat fmt = ais.getFormat();
 
-            AudioFormat baseFormat = ais.getFormat();
-            AudioFormat decodedFormat = new AudioFormat(
-                    AudioFormat.Encoding.PCM_SIGNED,
-                    baseFormat.getSampleRate(),
-                    16,
-                    baseFormat.getChannels(),
-                    baseFormat.getChannels() * 2,
-                    baseFormat.getSampleRate(),
-                    false);
-            ais = AudioSystem.getAudioInputStream(decodedFormat, ais);
+            if (fmt.getEncoding() != AudioFormat.Encoding.PCM_SIGNED) {
+                AudioFormat pcm = new AudioFormat(
+                        AudioFormat.Encoding.PCM_SIGNED,
+                        fmt.getSampleRate(),
+                        16,
+                        fmt.getChannels(),
+                        fmt.getChannels() * 2,
+                        fmt.getSampleRate(),
+                        false);
+                ais = AudioSystem.getAudioInputStream(pcm, ais);
+            }
 
             DataLine.Info info = new DataLine.Info(Clip.class, ais.getFormat());
             clip = (Clip) AudioSystem.getLine(info);
@@ -43,10 +44,10 @@ public class Reproductor implements Reproducible {
             return true;
 
         } catch (UnsupportedAudioFileException e) {
-            System.err.println("Formato no soportado (instala mp3spi para MP3): " + e.getMessage());
+            System.err.println("Unsupported format (install mp3spi for MP3): " + e.getMessage());
             return false;
         } catch (Exception e) {
-            System.err.println("Error cargando audio: " + e.getMessage());
+            System.err.println("Error loading audio: " + e.getMessage());
             return false;
         }
     }
@@ -93,10 +94,31 @@ public class Reproductor implements Reproducible {
     }
 
     public double getProgreso() {
-        if (clip == null || clip.getMicrosecondLength() == 0) {
+        if (clip == null || clip.getMicrosecondLength() <= 0) {
             return 0;
         }
         return (double) clip.getMicrosecondPosition() / clip.getMicrosecondLength();
+    }
+
+    public int getDuracionRealSegundos() {
+        if (clip == null || clip.getMicrosecondLength() <= 0) {
+            return 0;
+        }
+        return (int) (clip.getMicrosecondLength() / 1_000_000L);
+    }
+
+    public void seekTo(double ratio) {
+        if (clip == null) {
+            return;
+        }
+        long pos = (long) (clip.getMicrosecondLength() * Math.max(0, Math.min(1.0, ratio)));
+        boolean wasPlaying = playing;
+        clip.stop();
+        clip.setMicrosecondPosition(pos);
+        pausePosition = pos;
+        if (wasPlaying) {
+            clip.start();
+        }
     }
 
     public void setLineListener(LineListener listener) {
