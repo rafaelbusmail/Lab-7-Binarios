@@ -1,16 +1,24 @@
-/*
- * To change this license header, choose License Headers in Project Properties.
- * To change this template file, choose Tools | Templates
- * and open the template in the editor.
- */
-    package Lab_7_Binarios;
+package lab_7_binarios;
 
-    public class Genero {
+public class Genero {
 
-        /**
-         * @param args the command line arguments
-         */
-        public static void main(String[] args) {
-            // TODO code application logic here
-        }
+    private String nombre;
+
+    public Genero(String nombre) {
+        this.nombre = (nombre == null || nombre.trim().isEmpty()) ? "Otro" : nombre.trim();
     }
+
+    public String getNombre() {
+        return nombre;
+    }
+
+    @Override
+    public String toString() {
+        return nombre;
+    }
+
+    public static final String[] SUGERENCIAS = {
+        "Pop", "Rock", "Hip Hop", "Electrónica", "Clásica",
+        "Jazz", "Reggaetón", "Latin", "Metal", "Otro"
+    };
+}

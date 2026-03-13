@@ -1,16 +1,16 @@
-/*
- * To change this license header, choose License Headers in Project Properties.
- * To change this template file, choose Tools | Templates
- * and open the template in the editor.
- */
-    package Lab_7_Binarios;
+package lab_7_binarios;
 
-    public class GUI {
+import javax.sound.sampled.LineEvent;
+import javax.swing.*;
+import javax.swing.border.*;
+import java.awt.*;
+import java.awt.event.*;
+import java.awt.image.BufferedImage;
+import java.io.*;
+import java.util.List;
+import javax.imageio.ImageIO;
 
-        /**
-         * @param args the command line arguments
-         */
-        public static void main(String[] args) {
-            // TODO code application logic here
-        }
-    }
+public class GUI extends JFrame {
+
+    
+}
