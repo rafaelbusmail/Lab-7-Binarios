@@ -4,16 +4,6 @@ import java.io.*;
 import java.util.ArrayList;
 import java.util.List;
 
-/*
- * Estructura de cada registro (RECORD_SIZE bytes):
- *   nombre    : 100 chars * 2 = 200 bytes
- *   artista   : 100 chars * 2 = 200 bytes
- *   rutaAudio : 300 chars * 2 = 600 bytes
- *   rutaImagen: 300 chars * 2 = 600 bytes
- *   genero    :  50 chars * 2 = 100 bytes  ← ahora texto libre
- *   duracion  : int            =   4 bytes
- *   TOTAL: 1704 bytes por canción
- */
 public class PlaylistManager {
 
     private static final String CARPETA = "playlist_data";
@@ -75,7 +65,7 @@ public class PlaylistManager {
         escribirCampo(c.getArtista(), Cancion.ARTISTA_MAX);
         escribirCampo(c.getRutaAudio(), Cancion.RUTA_MAX);
         escribirCampo(c.getRutaImagen(), Cancion.IMAGEN_MAX);
-        escribirCampo(c.getGenero().getNombre(), Cancion.GENERO_MAX); // texto libre
+        escribirCampo(c.getGenero().getNombre(), Cancion.GENERO_MAX); 
         raf.writeInt(c.getDuracion());
     }
 

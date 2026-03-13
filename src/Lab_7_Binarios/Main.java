@@ -1,16 +1,10 @@
-/*
- * To change this license header, choose License Headers in Project Properties.
- * To change this template file, choose Tools | Templates
- * and open the template in the editor.
- */
-    package Lab_7_Binarios;
+package lab_7_binarios;
 
-    public class Main {
+import javax.swing.SwingUtilities;
 
-        /**
-         * @param args the command line arguments
-         */
-        public static void main(String[] args) {
-            // TODO code application logic here
-        }
+public class Main {
+
+    public static void main(String[] args) {
+        SwingUtilities.invokeLater(() -> new GUI());
     }
+}
