@@ -99,7 +99,7 @@ public class Reproductor implements Reproducible {
         }
         return (double) clip.getMicrosecondPosition() / clip.getMicrosecondLength();
     }
-
+   
     public int getDuracionRealSegundos() {
         if (clip == null || clip.getMicrosecondLength() <= 0) {
             return 0;

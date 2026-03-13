@@ -58,7 +58,6 @@ public class GUI extends JFrame {
         timerUI.start();
     }
 
-    
     private void initUI() {
         setTitle("Music Player");
         setSize(900, 580);
@@ -229,7 +228,6 @@ public class GUI extends JFrame {
         return panel;
     }
 
-    
     private void accionPlayPause() {
         if (reproductor.isPlaying()) {
             reproductor.pause();
@@ -294,7 +292,7 @@ public class GUI extends JFrame {
                         "\"" + audioFile.getName() + "\" was not found.\n"
                         + "Please select an existing audio file.",
                         "File not found", JOptionPane.WARNING_MESSAGE);
-                continue;  
+                continue;
             }
             String ext = audioFile.getName().toLowerCase();
             if (!ext.endsWith(".mp3") && !ext.endsWith(".wav")) {
@@ -452,7 +450,6 @@ public class GUI extends JFrame {
         lblDuracion.setText(formatSeg(elapsed) + " / " + formatSeg(total));
     }
 
-    
     private void cargarYMostrar(int idx) {
         if (idx < 0 || idx >= playlist.size()) {
             return;
@@ -508,7 +505,7 @@ public class GUI extends JFrame {
         mostrarInfoCancion(c);
         cargarImagen(c.getRutaImagen());
         listaUI.setSelectedIndex(idx);
-        listaUI.repaint(); 
+        listaUI.repaint();
     }
 
     private void mostrarInfoCancion(Cancion c) {
@@ -614,7 +611,6 @@ public class GUI extends JFrame {
         return String.format("%d:%02d", seg / 60, seg % 60);
     }
 
-   
     private JLabel label(String text, int size, int style, Color color) {
         JLabel l = new JLabel(text);
         l.setFont(new Font("Arial", style, size));
@@ -659,7 +655,6 @@ public class GUI extends JFrame {
         return btn;
     }
 
-    
     private class PlaylistCellRenderer extends DefaultListCellRenderer {
 
         @Override
