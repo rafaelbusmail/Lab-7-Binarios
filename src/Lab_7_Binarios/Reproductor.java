@@ -25,6 +25,7 @@ public class Reproductor implements Reproducible {
             AudioInputStream ais = AudioSystem.getAudioInputStream(archivo);
             AudioFormat fmt = ais.getFormat();
 
+            
             if (fmt.getEncoding() != AudioFormat.Encoding.PCM_SIGNED) {
                 AudioFormat pcm = new AudioFormat(
                         AudioFormat.Encoding.PCM_SIGNED,
@@ -100,11 +101,25 @@ public class Reproductor implements Reproducible {
         return (double) clip.getMicrosecondPosition() / clip.getMicrosecondLength();
     }
 
+   
     public int getDuracionRealSegundos() {
         if (clip == null || clip.getMicrosecondLength() <= 0) {
             return 0;
         }
         return (int) (clip.getMicrosecondLength() / 1_000_000L);
+    }
+
+    public void setVolumen(float nivel) {
+        if (clip == null) {
+            return;
+        }
+        if (clip.isControlSupported(FloatControl.Type.MASTER_GAIN)) {
+            FloatControl gain = (FloatControl) clip.getControl(FloatControl.Type.MASTER_GAIN);
+            float dB = nivel <= 0 ? gain.getMinimum()
+                    : (float) (20.0 * Math.log10(nivel));
+            dB = Math.max(gain.getMinimum(), Math.min(gain.getMaximum(), dB));
+            gain.setValue(dB);
+        }
     }
 
     public void seekTo(double ratio) {
