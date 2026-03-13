@@ -28,6 +28,7 @@ public class GUI extends JFrame {
     private JList<String> listaUI;
     private DefaultListModel<String> modeloLista;
     private Timer timerUI;
+
     private static final int IMG_W = 340;
     private static final int IMG_H = 340;
 
@@ -52,7 +53,6 @@ public class GUI extends JFrame {
         reproductor = new Reproductor();
         initUI();
         refrescarLista();
-
         timerUI = new Timer(1000, e -> tickUI());
         timerUI.start();
     }
@@ -77,7 +77,6 @@ public class GUI extends JFrame {
 
         add(panelCenter(), BorderLayout.CENTER);
         add(panelRight(), BorderLayout.EAST);
-
         setLocationRelativeTo(null);
         setVisible(true);
     }
@@ -127,7 +126,6 @@ public class GUI extends JFrame {
         panel.add(lblDuracion);
         panel.add(Box.createVerticalStrut(12));
         panel.add(controls);
-
         return panel;
     }
 
@@ -160,8 +158,7 @@ public class GUI extends JFrame {
         JLabel title = new JLabel("  Playlist");
         title.setForeground(TEXT_MAIN);
         title.setFont(new Font("Arial", Font.BOLD, 14));
-        title.setBorder(BorderFactory.createMatteBorder(0, 0, 1,
-                0, new Color(50, 50, 68)));
+        title.setBorder(BorderFactory.createMatteBorder(0, 0, 1, 0, new Color(50, 50, 68)));
 
         modeloLista = new DefaultListModel<>();
         listaUI = new JList<>(modeloLista);
@@ -203,7 +200,6 @@ public class GUI extends JFrame {
         panel.add(title, BorderLayout.NORTH);
         panel.add(scroll, BorderLayout.CENTER);
         panel.add(btnPanel, BorderLayout.SOUTH);
-
         return panel;
     }
 
@@ -230,9 +226,10 @@ public class GUI extends JFrame {
     }
 
     private void accionStop() {
+        Cancion c = reproductor.getCancionActual();
         reproductor.stop();
         barraProgreso.setValue(0);
-        lblDuracion.setText(totalFormateado());
+        lblDuracion.setText("0:00 / " + (c != null ? formatSeg(c.getDuracion()) : "0:00"));
     }
 
     private void accionSelect() {
@@ -256,8 +253,6 @@ public class GUI extends JFrame {
         File audioFile = chooser.getSelectedFile();
         String rutaAudio = audioFile.getAbsolutePath();
 
-        int duracionDetectada = detectarDuracion(rutaAudio);
-
         JFileChooser imgChooser = new JFileChooser();
         imgChooser.setDialogTitle("Select album art (optional — you can cancel)");
         imgChooser.setFileFilter(new javax.swing.filechooser.FileNameExtensionFilter(
@@ -266,6 +261,8 @@ public class GUI extends JFrame {
         if (imgChooser.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
             rutaImagen = imgChooser.getSelectedFile().getAbsolutePath();
         }
+
+        int duracionDetectada = detectarDuracionPorClip(rutaAudio);
 
         JTextField tfName = new JTextField(
                 audioFile.getName().replaceAll("\\.[^.]+$", ""), 22);
@@ -284,10 +281,8 @@ public class GUI extends JFrame {
         form.add(tfArtist);
         form.add(new JLabel("Genre:"));
         form.add(cbGenre);
-
-        String durFmt = formatSeg(duracionDetectada);
         form.add(new JLabel("Duration:"));
-        form.add(new JLabel(durFmt + "  (auto-detected)"));
+        form.add(new JLabel(formatSeg(duracionDetectada) + "  (auto-detected)"));
 
         int res = JOptionPane.showConfirmDialog(this, form,
                 "Song details", JOptionPane.OK_CANCEL_OPTION,
@@ -356,7 +351,7 @@ public class GUI extends JFrame {
             return;
         }
 
-        int total = c.getDuracion();
+        int total = reproductor.getDuracionRealSegundos();
         int elapsed = (int) (reproductor.getProgreso() * total);
 
         barraProgreso.setValue((int) (reproductor.getProgreso() * 1000));
@@ -370,11 +365,28 @@ public class GUI extends JFrame {
         indiceActual = idx;
         Cancion c = playlist.get(idx);
         reproductor.cargar(c);
+
+        if (c.getDuracion() == 0) {
+            int durReal = reproductor.getDuracionRealSegundos();
+            if (durReal > 0) {
+                c.setDuracion(durReal);
+                try {
+                    List<Cancion> todas = playlistManager.leerTodas();
+                    if (idx < todas.size()) {
+                        todas.get(idx).setDuracion(durReal);
+                        playlistManager.reescribirTodas(todas);
+                    }
+                } catch (IOException ignored) {
+                }
+                refrescarLista();
+            }
+        }
+
         reproductor.setLineListener(ev -> {
             if (ev.getType() == LineEvent.Type.STOP && reproductor.getProgreso() >= 0.99) {
                 SwingUtilities.invokeLater(() -> {
                     barraProgreso.setValue(0);
-                    lblDuracion.setText("0:00 / " + formatSeg(c.getDuracion()));
+                    lblDuracion.setText("0:00 / " + formatSeg(reproductor.getDuracionRealSegundos()));
                 });
             }
         });
@@ -397,5 +409,175 @@ public class GUI extends JFrame {
         }
     }
 
-    
+    private void cargarImagen(String ruta) {
+        if (ruta == null || ruta.isEmpty()) {
+            mostrarImagenDefault();
+            return;
+        }
+        try {
+            BufferedImage src = ImageIO.read(new File(ruta));
+            if (src == null) {
+                mostrarImagenDefault();
+                return;
+            }
+            lblImagen.setIcon(new ImageIcon(letterbox(src, IMG_W, IMG_H)));
+            lblImagen.setText("");
+        } catch (IOException e) {
+            mostrarImagenDefault();
+        }
+    }
+
+    private Image letterbox(BufferedImage src, int maxW, int maxH) {
+        double scale = Math.min((double) maxW / src.getWidth(),
+                (double) maxH / src.getHeight());
+        int w = (int) (src.getWidth() * scale);
+        int h = (int) (src.getHeight() * scale);
+        return src.getScaledInstance(w, h, Image.SCALE_SMOOTH);
+    }
+
+    private void mostrarImagenDefault() {
+        BufferedImage img = new BufferedImage(IMG_W, IMG_H, BufferedImage.TYPE_INT_RGB);
+        Graphics2D g2 = img.createGraphics();
+        g2.setColor(new Color(35, 35, 48));
+        g2.fillRect(0, 0, IMG_W, IMG_H);
+        g2.setColor(new Color(70, 70, 95));
+        g2.setFont(new Font("Arial", Font.PLAIN, 90));
+        FontMetrics fm = g2.getFontMetrics();
+        String nota = "♪";
+        g2.drawString(nota, (IMG_W - fm.stringWidth(nota)) / 2,
+                (IMG_H + fm.getAscent()) / 2 - 15);
+        g2.dispose();
+        lblImagen.setIcon(new ImageIcon(img));
+        lblImagen.setText("");
+    }
+
+    private void refrescarLista() {
+        int sel = listaUI.getSelectedIndex();
+        modeloLista.clear();
+        for (Cancion c : playlist) {
+            modeloLista.addElement(c.getNombre());
+        }
+        if (sel >= 0 && sel < modeloLista.size()) {
+            listaUI.setSelectedIndex(sel);
+        }
+    }
+
+    private int detectarDuracionPorClip(String ruta) {
+        try {
+            File archivo = new File(ruta);
+            AudioInputStream ais = AudioSystem.getAudioInputStream(archivo);
+            AudioFormat fmt = ais.getFormat();
+
+            if (fmt.getEncoding() != AudioFormat.Encoding.PCM_SIGNED) {
+                AudioFormat pcm = new AudioFormat(
+                        AudioFormat.Encoding.PCM_SIGNED,
+                        fmt.getSampleRate(), 16,
+                        fmt.getChannels(), fmt.getChannels() * 2,
+                        fmt.getSampleRate(), false);
+                ais = AudioSystem.getAudioInputStream(pcm, ais);
+            }
+
+            DataLine.Info info = new DataLine.Info(Clip.class, ais.getFormat());
+            Clip tempClip = (Clip) AudioSystem.getLine(info);
+            tempClip.open(ais);
+            int segundos = (int) (tempClip.getMicrosecondLength() / 1_000_000L);
+            tempClip.close();
+            return segundos;
+
+        } catch (Exception e) {
+            System.err.println("Could not detect duration: " + e.getMessage());
+            return 0;
+        }
+    }
+
+    private String formatSeg(int seg) {
+        return String.format("%d:%02d", seg / 60, seg % 60);
+    }
+
+    private JLabel label(String text, int size, int style, Color color) {
+        JLabel l = new JLabel(text);
+        l.setFont(new Font("Arial", style, size));
+        l.setForeground(color);
+        l.setAlignmentX(Component.CENTER_ALIGNMENT);
+        return l;
+    }
+
+    private JButton ctrlBtn(String icon, String tip) {
+        JButton btn = new JButton(icon);
+        btn.setToolTipText(tip);
+        btn.setFont(new Font("Segoe UI Emoji", Font.PLAIN, 22));
+        btn.setForeground(TEXT_MAIN);
+        btn.setBackground(BG_CARD);
+        btn.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(new Color(55, 55, 72), 1),
+                BorderFactory.createEmptyBorder(8, 18, 8, 18)));
+        btn.setFocusPainted(false);
+        btn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        btn.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseEntered(MouseEvent e) {
+                btn.setBackground(new Color(50, 50, 68));
+            }
+
+            @Override
+            public void mouseExited(MouseEvent e) {
+                btn.setBackground(BG_CARD);
+            }
+        });
+        return btn;
+    }
+
+    private JButton actionBtn(String text, Color bg) {
+        JButton btn = new JButton(text);
+        btn.setFont(new Font("Arial", Font.BOLD, 12));
+        btn.setBackground(bg);
+        btn.setForeground(Color.WHITE);
+        btn.setBorder(BorderFactory.createEmptyBorder(8, 0, 8, 0));
+        btn.setFocusPainted(false);
+        btn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        return btn;
+    }
+
+    private class PlaylistCellRenderer extends DefaultListCellRenderer {
+
+        @Override
+        public Component getListCellRendererComponent(JList<?> list, Object value,
+                int index, boolean isSelected, boolean cellHasFocus) {
+
+            JPanel cell = new JPanel(new BorderLayout(8, 0));
+            cell.setBorder(BorderFactory.createEmptyBorder(6, 12, 6, 12));
+
+            Cancion c = (index < playlist.size()) ? playlist.get(index) : null;
+
+            JLabel num = new JLabel(String.valueOf(index + 1));
+            num.setFont(new Font("Arial", Font.PLAIN, 11));
+            num.setForeground(TEXT_DIM);
+            num.setPreferredSize(new Dimension(20, 0));
+
+            JPanel info = new JPanel();
+            info.setLayout(new BoxLayout(info, BoxLayout.Y_AXIS));
+            info.setOpaque(false);
+
+            JLabel lNombre = new JLabel(c != null ? c.getNombre() : value.toString());
+            lNombre.setFont(new Font("Arial", Font.BOLD, 12));
+            lNombre.setForeground(index == indiceActual ? ACCENT : TEXT_MAIN);
+
+            JLabel lArtista = new JLabel(c != null ? c.getArtista() : "");
+            lArtista.setFont(new Font("Arial", Font.PLAIN, 11));
+            lArtista.setForeground(TEXT_SUB);
+
+            info.add(lNombre);
+            info.add(lArtista);
+
+            JLabel lDur = new JLabel(c != null ? formatSeg(c.getDuracion()) : "");
+            lDur.setFont(new Font("Arial", Font.PLAIN, 11));
+            lDur.setForeground(TEXT_DIM);
+
+            cell.setBackground(isSelected ? SEL_BG : BG_LIST);
+            cell.add(num, BorderLayout.WEST);
+            cell.add(info, BorderLayout.CENTER);
+            cell.add(lDur, BorderLayout.EAST);
+            return cell;
+        }
+    }
 }
